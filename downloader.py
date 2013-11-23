@@ -7,13 +7,9 @@ import csv
 import requests
 import subprocess
 import shutil
-
 import logging
-
 from datetime import datetime
-
 from sqlite3 import dbapi2 as sqlite3
-
 from dropbox.client import DropboxClient, DropboxOAuth2Flow
 
 # configuration
@@ -27,7 +23,7 @@ DATABASE_NAME = "myapp.db"
 logging.basicConfig(filename=LOGFILE_NAME,format='%(asctime)s %(message)s',level=logging.DEBUG)
 
 # crontab
-# 5 2 * * * /home/samba-share/nas/www/get_iplayer/get_iplayer/bin/python get_iplayer_looter.py
+# 5 2 * * * /home/samba-share/nas/www/get_iplayer/get_iplayer/bin/python /home/samba-share/nas/www/get_iplayer/get_iplayer_looter.py
 
 # uwsgi
 # tail -f /var/log/uwsgi-getiplayer.log
@@ -68,25 +64,39 @@ def main():
         reader = csv.reader(open(SERIES_FILE, 'r'), delimiter=',')
         reader.next()
         for row in reader:
-            r = requests.get("http://www.bbc.co.uk/programmes/" + row[0] + "/episodes/upcoming.json")
-            pid = r.json()["broadcasts"][0]["programme"]["pid"]
-            logging.info("pid %s", pid)
-            response = client.search('', pid)
-            if len(response) == 0:
-                logging.info("pid not found in Dropbox")
-                output = subprocess.check_output([GETIPLAYER_DIR, '--modes=flashaaclow,rtspaaclow', '--type=radio', '--subdir', '--output=' + RECORDINGS_DIR, '--file-prefix="<nameshort>-<episodeshort>-<senum>-<pid>"', '--pid=' + pid])
-                output = subprocess.check_output(['find', RECORDINGS_DIR, '-name', '-o *.m4a', '-name', '*.mp3']).strip()
-                if output != "":
-                    logging.info("file downloaded")
-                    dirname = os.path.basename(os.path.dirname(output))
-                    filename = os.path.basename(output)
-                    response = client.put_file('/' + dirname + '/' + filename, open(output))
-                    logging.info("file uploaded to Dropbox")
-                    logging.debug(response)
-                    shutil.rmtree(os.path.dirname(output))
-                    logging.info("downloaded files cleaned up")
+            sid = row[0]
+            pid = row[1]
+            logging.info("sid %s", sid)
+            r = requests.get("http://www.bbc.co.uk/programmes/" + sid + "/episodes/player.json")
+            if(r.status_code == 404):
+                logging.info("404 Not Found")
+                continue
+            for episode in r.json()["episodes"]:
+                tpid = episode["programme"]["pid"]
+                if(pid != "" and tpid != pid):
+                    continue;
+                logging.info("pid %s START", tpid)
+                response = client.search('', tpid)
+                if len(response) == 0:
+                    logging.info("pid %s not found in Dropbox", tpid)
+                    subprocess.check_output([GETIPLAYER_DIR, '--modes=flashaaclow,rtspaaclow', '--type=radio', '--subdir', '--output=' + RECORDINGS_DIR, '--file-prefix="<nameshort>-<episodeshort>-<senum>-<pid>"', '--pid=' + tpid])
+                    recordings = subprocess.check_output(['find', RECORDINGS_DIR, '-name', '*.m4a']).strip()
+                    if recordings != "":
+                        logging.info("file downloaded")
+                        dirname = os.path.basename(os.path.dirname(recordings))
+                        filename = os.path.basename(recordings)
+                        response = client.put_file('/' + dirname + '/' + filename, open(recordings))
+                        logging.info("file uploaded to Dropbox")
+                        logging.debug(response)
+                        shutil.rmtree(os.path.dirname(recordings))
+                        logging.info("pid %s END", tpid)
+                    else:
+                        logging.info("pid %s not available yet", tpid)
+                    continue
                 else:
-                    logging.info("pid not available yet")
+                    logging.info("pid %s already in Dropbox", tpid)
+            continue
+            logging.info("sid %s END", sid)
         os.remove(SERIES_FILE)
     logging.info('END')
 
