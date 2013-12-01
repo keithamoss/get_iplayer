@@ -1,4 +1,4 @@
-#!/home/samba-share/nas/www/get_iplayer/get_iplayer/bin
+#!/usr/bin/env /home/samba-share/nas/www/get_iplayer/get_iplayer/bin
 # -*- coding: utf-8 -*-
 
 import os
@@ -15,15 +15,15 @@ from dropbox.client import DropboxClient, DropboxOAuth2Flow
 # configuration
 RECORDINGS_DIR = "/home/samba-share/nas/www/get_iplayer/recordings"
 GETIPLAYER_DIR = "/usr/bin/get_iplayer"
-LOGFILE_NAME = "get_iplayer.log"
-SERIES_FILE = "series.csv"
+LOGFILE_NAME = "/home/samba-share/nas/www/get_iplayer/get_iplayer.log"
+SERIES_FILE = "/home/samba-share/nas/www/get_iplayer/series.csv"
 DROPBOX_USERNAME = "keithamoss"
-DATABASE_NAME = "myapp.db"
+DATABASE_NAME = "/home/samba-share/nas/www/get_iplayer/instance/myapp.db"
 
 logging.basicConfig(filename=LOGFILE_NAME,format='%(asctime)s %(message)s',level=logging.DEBUG)
 
 # crontab
-# 5 2 * * * /home/samba-share/nas/www/get_iplayer/get_iplayer/bin/python /home/samba-share/nas/www/get_iplayer/get_iplayer_looter.py
+# 5 1 * * * /home/samba-share/nas/www/get_iplayer/get_iplayer/bin/python /home/samba-share/nas/www/get_iplayer/get_iplayer_looter.py
 
 # uwsgi
 # tail -f /var/log/uwsgi-getiplayer.log
@@ -33,7 +33,8 @@ def get_db():
     """
     Opens a new database connection if there is none yet for the current application context.
     """
-    sqlite_db = sqlite3.connect(os.path.join("instance", DATABASE_NAME))
+    # sqlite_db = sqlite3.connect(os.path.join("instance", DATABASE_NAME))
+    sqlite_db = sqlite3.connect(DATABASE_NAME)
     sqlite_db.row_factory = sqlite3.Row
 
     return sqlite_db
@@ -66,6 +67,11 @@ def main():
         for row in reader:
             sid = row[0]
             pid = row[1]
+            active = row[4]
+
+            if(active == 0):
+                continue
+
             logging.info("sid %s", sid)
             r = requests.get("http://www.bbc.co.uk/programmes/" + sid + "/episodes/player.json")
             if(r.status_code == 404):
