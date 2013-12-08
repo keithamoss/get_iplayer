@@ -49,6 +49,21 @@ def get_access_token():
         return None
     return row[0]
 
+def download(pid, client):
+    subprocess.check_output([GETIPLAYER_DIR, '--modes=flashaaclow,rtspaaclow', '--type=radio', '--subdir', '--force', '--output=' + RECORDINGS_DIR, '--file-prefix="<nameshort>-<episodeshort>-<senum>-<pid>"', '--pid=' + pid])
+    recordings = subprocess.check_output(['find', RECORDINGS_DIR, '-name', '*.m4a']).strip()
+    if recordings != "":
+        logging.info("file downloaded")
+        dirname = os.path.basename(os.path.dirname(recordings))
+        filename = os.path.basename(recordings)
+        response = client.put_file('/' + dirname + '/' + filename, open(recordings))
+        logging.info("file uploaded to Dropbox")
+        logging.debug(response)
+        shutil.rmtree(os.path.dirname(recordings))
+        logging.info("pid %s END", pid)
+    else:
+        logging.info("pid %s not available yet", pid)
+
 def main():
     logging.info('BEGIN')
     access_token = get_access_token()
@@ -72,11 +87,17 @@ def main():
             if(active == 0):
                 continue
 
+            if(sid == "" and pid != ""):
+                logging.info("pid %s (no sid)", pid)
+                download(pid, client)
+                continue
+
             logging.info("sid %s", sid)
             r = requests.get("http://www.bbc.co.uk/programmes/" + sid + "/episodes/player.json")
             if(r.status_code == 404):
                 logging.info("404 Not Found")
                 continue
+
             for episode in r.json()["episodes"]:
                 tpid = episode["programme"]["pid"]
                 if(pid != "" and tpid != pid):
@@ -85,19 +106,7 @@ def main():
                 response = client.search('', tpid)
                 if len(response) == 0:
                     logging.info("pid %s not found in Dropbox", tpid)
-                    subprocess.check_output([GETIPLAYER_DIR, '--modes=flashaaclow,rtspaaclow', '--type=radio', '--subdir', '--output=' + RECORDINGS_DIR, '--file-prefix="<nameshort>-<episodeshort>-<senum>-<pid>"', '--pid=' + tpid])
-                    recordings = subprocess.check_output(['find', RECORDINGS_DIR, '-name', '*.m4a']).strip()
-                    if recordings != "":
-                        logging.info("file downloaded")
-                        dirname = os.path.basename(os.path.dirname(recordings))
-                        filename = os.path.basename(recordings)
-                        response = client.put_file('/' + dirname + '/' + filename, open(recordings))
-                        logging.info("file uploaded to Dropbox")
-                        logging.debug(response)
-                        shutil.rmtree(os.path.dirname(recordings))
-                        logging.info("pid %s END", tpid)
-                    else:
-                        logging.info("pid %s not available yet", tpid)
+                    download(tpid, client)
                     continue
                 else:
                     logging.info("pid %s already in Dropbox", tpid)
