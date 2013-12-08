@@ -89,7 +89,12 @@ def main():
 
             if(sid == "" and pid != ""):
                 logging.info("pid %s (no sid)", pid)
-                download(pid, client)
+                response = client.search('', pid)
+                if len(response) == 0:
+                    logging.info("pid %s not found in Dropbox", pid)
+                    download(pid, client)
+                else:
+                    logging.info("pid %s already in Dropbox", pid)
                 continue
 
             logging.info("sid %s", sid)
